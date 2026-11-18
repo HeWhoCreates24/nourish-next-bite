@@ -28,3 +28,6 @@ use the editor.
   own key and store it in Secrets.
 - **Secrets.** Lovable manages them. Do not put secret values in the repo.
 <!-- LOVABLE:END -->
+
+## Nutrition tracker architecture
+- Keep nutrition math in a pure shared module and perform personal-data reads and writes through authenticated, row-scoped server functions; this keeps target calculations consistent and private.

@@ -1,4 +1,4 @@
-- [ ] Enable sign-in and store each user's nutrition profile and meal log privately.
-- [ ] Build the meal diary, personalized nutrition targets, and next-meal guidance.
-- [ ] Connect an OpenAI-compatible AI provider using a securely handled custom key.
-- [ ] Verify the main logging flow and preview.
+- [x] Enable sign-in and store each user's nutrition profile and meal log privately.
+- [x] Build the meal diary, personalized nutrition targets, and next-meal guidance.
+- [x] Connect OpenRouter's free model router using a securely handled key.
+- [ ] Verify the main logging flow, sign-in state, and preview.
