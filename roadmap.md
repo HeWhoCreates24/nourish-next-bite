@@ -2,3 +2,7 @@
 - [x] Build the meal diary, personalized nutrition targets, and next-meal guidance.
 - [x] Connect OpenRouter's free model router using a securely handled key.
 - [ ] Verify the main logging flow, sign-in state, and preview.
+- [ ] Replace the shared AI key with private per-user provider settings.
+- [ ] Add provider URL choices, custom URL entry, model discovery/search, and model selection.
+- [ ] Use each user's saved provider for meal analysis; remove the old shared key.
+- [ ] Verify settings and meal-provider flow, then commit the changes.

@@ -31,3 +31,5 @@ use the editor.
 
 ## Nutrition tracker architecture
 - Keep nutrition math in a pure shared module and perform personal-data reads and writes through authenticated, row-scoped server functions; this keeps target calculations consistent and private.
+
+- Store BYOK settings in an owner-scoped table; encrypt API keys in authenticated server functions and decrypt them only for server-side provider requests, keeping plaintext keys out of browser storage and database rows.

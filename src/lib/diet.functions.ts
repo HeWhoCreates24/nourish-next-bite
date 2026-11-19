@@ -83,8 +83,13 @@ export const logMeal = createServerFn({ method: "POST" })
     const body = toBody(profile as ProfileRow | null);
     if (!body) return { error: "Please complete your profile first so targets can be set." };
     const { analyzeMeal, MealAiError } = await import("@/lib/server/meal-ai.server");
+    const { providerKeyForRequest } = await import("@/lib/ai-provider.server");
+    const settings = await context.supabase.from("ai_provider_settings").select("*").eq("user_id", userId).maybeSingle();
+    if (settings.error) throw new Error("Could not load your AI provider settings.");
+    if (!settings.data) return { error: "Connect an AI provider in settings before logging a meal." };
     try {
       const analysis = await analyzeMeal({
+        provider: await providerKeyForRequest(settings.data),
         mealText: data.text,
         targets: computeTargets(body),
         eatenBefore: sumNutrients((meals ?? []).map((m) => m.nutrients)),

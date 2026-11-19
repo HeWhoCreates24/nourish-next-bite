@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_provider_settings: {
+        Row: {
+          base_url: string
+          created_at: string
+          encrypted_api_key: string
+          encryption_iv: string
+          model_id: string
+          provider_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          base_url: string
+          created_at?: string
+          encrypted_api_key: string
+          encryption_iv: string
+          model_id: string
+          provider_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          base_url?: string
+          created_at?: string
+          encrypted_api_key?: string
+          encryption_iv?: string
+          model_id?: string
+          provider_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       meal_logs: {
         Row: {
           advice: string | null

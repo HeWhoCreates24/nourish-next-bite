@@ -2,11 +2,9 @@ import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { streamText } from "ai";
 import { NUTRIENTS, normalizeNutrients, type Nutrients } from "@/lib/nutrition";
 
-const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
-const DEFAULT_MODEL = "openrouter/free";
-
 export interface MealItem { name: string; quantity: string; calories: number }
 export interface MealAnalysis { summary: string; items: MealItem[]; nutrients: Nutrients; advice: string }
+export interface AiProviderConfig { apiKey: string; baseUrl: string; modelId: string }
 
 export class MealAiError extends Error {
   constructor(message: string, readonly status?: number) { super(message); }
@@ -23,28 +21,25 @@ function extractJson(text: string): unknown {
 
 function friendlyError(error: unknown): MealAiError {
   const status = (error as { statusCode?: number })?.statusCode;
-  if (status === 401) return new MealAiError("The OpenRouter key was rejected. Please update it.", 401);
-  if (status === 402) return new MealAiError("OpenRouter reports the account needs credits.", 402);
-  if (status === 429) return new MealAiError("The free AI models are busy right now. Please try again shortly.", 429);
+  if (status === 401 || status === 403) return new MealAiError("Your AI provider rejected the saved key. Update it in AI settings.", status);
+  if (status === 402) return new MealAiError("Your AI provider reports that the account needs credits.", 402);
+  if (status === 429) return new MealAiError("Your AI provider is busy right now. Please try again shortly.", 429);
   if (error instanceof MealAiError) return error;
   console.error("Meal analysis failed", error);
   return new MealAiError("Meal analysis failed. Please try again.", status);
 }
 
 export async function analyzeMeal(input: {
+  provider: AiProviderConfig;
   mealText: string;
   targets: Nutrients;
   eatenBefore: Nutrients;
   dietaryNotes: string | null;
 }): Promise<MealAnalysis> {
-  const apiKey = process.env["OPENROUTER_API_KEY"];
-  if (!apiKey) throw new MealAiError("OpenRouter is not connected yet.");
-
   const provider = createOpenAICompatible({
-    name: "openrouter",
-    baseURL: OPENROUTER_BASE_URL,
-    apiKey,
-    headers: { "X-Title": "Ember Nutrition Tracker" },
+    name: "user-provider",
+    baseURL: input.provider.baseUrl,
+    apiKey: input.provider.apiKey,
   });
 
   const keys = NUTRIENTS.map((n) => `${n.key} (${n.unit})`).join(", ");
@@ -62,7 +57,7 @@ Already eaten today before this meal: ${JSON.stringify(input.eatenBefore)}
 
   try {
     const result = streamText({
-      model: provider.chatModel(process.env["OPENROUTER_MODEL"] || DEFAULT_MODEL),
+      model: provider.chatModel(input.provider.modelId),
       instructions,
       prompt,
       maxRetries: 1,

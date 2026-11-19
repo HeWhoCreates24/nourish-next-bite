@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { Activity, Apple, ArrowDownRight, ArrowUpRight, ChevronDown, ChevronUp, CircleHelp, Clock3, Flame, Leaf, LoaderCircle, LogOut, Plus, Settings2, Sparkles, Trash2, Utensils, X } from "lucide-react";
+import { Activity, Apple, ArrowDownRight, ArrowUpRight, ChevronDown, ChevronUp, CircleHelp, Clock3, Flame, KeyRound, Leaf, LoaderCircle, LogOut, Plus, Settings2, Sparkles, Trash2, Utensils, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { deleteMeal, getDashboard, logMeal, saveProfile } from "@/lib/diet.functions";
 import { NUTRIENTS, computeTargets, emptyNutrients, remaining, type NutrientKey } from "@/lib/nutrition";
+import { AI_PROVIDERS, providerBaseUrl, type AIModel, type AIProviderId } from "@/lib/ai-provider";
+import { getAiProviderModels, getAiProviderSettings, removeAiProviderSettings, saveAiProviderSettings } from "@/lib/ai-provider.functions";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({ meta: [
@@ -47,6 +49,10 @@ function Ring({ value, target }: { value: number; target: number }) {
 function Dashboard() {
   const navigate = useNavigate();
   const getData = useServerFn(getDashboard); const saveProfileFn = useServerFn(saveProfile);
+  const getAiSettings = useServerFn(getAiProviderSettings);
+  const getModels = useServerFn(getAiProviderModels);
+  const saveAiSettings = useServerFn(saveAiProviderSettings);
+  const removeAiSettings = useServerFn(removeAiProviderSettings);
   const logMealFn = useServerFn(logMeal); const deleteMealFn = useServerFn(deleteMeal);
   const [data, setData] = useState<DashboardData | null>(null);
   const [profile, setProfile] = useState<ProfileForm>(initialProfile);
@@ -56,6 +62,18 @@ function Dashboard() {
   const [mealText, setMealText] = useState("");
   const [error, setError] = useState("");
   const [profileOpen, setProfileOpen] = useState(false);
+  const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
+  const [aiProviderId, setAiProviderId] = useState<AIProviderId>("openrouter");
+  const [aiBaseUrl, setAiBaseUrl] = useState(providerBaseUrl("openrouter"));
+  const [aiApiKey, setAiApiKey] = useState("");
+  const [aiModels, setAiModels] = useState<AIModel[]>([]);
+  const [aiModelSearch, setAiModelSearch] = useState("");
+  const [aiModelId, setAiModelId] = useState("");
+  const [aiHasSavedKey, setAiHasSavedKey] = useState(false);
+  const [aiLoadingModels, setAiLoadingModels] = useState(false);
+  const [aiSaving, setAiSaving] = useState(false);
+  const [aiSettingsError, setAiSettingsError] = useState("");
+  const [aiSettingsMessage, setAiSettingsMessage] = useState("");
   const [microOpen, setMicroOpen] = useState(false);
   const [expandedMeal, setExpandedMeal] = useState<string | null>(null);
   const [userName, setUserName] = useState("there");
@@ -130,9 +148,96 @@ function Dashboard() {
     await navigate({ to: "/", search: { next: "/dashboard" }, replace: true });
   };
 
+  const openAiSettings = async () => {
+    setAiSettingsOpen(true);
+    setAiSettingsError("");
+    setAiSettingsMessage("");
+    try {
+      const saved = await getAiSettings();
+      if (saved) {
+        const id = AI_PROVIDERS.some((provider) => provider.id === saved.providerId) ? saved.providerId as AIProviderId : "custom";
+        setAiProviderId(id);
+        setAiBaseUrl(saved.baseUrl);
+        setAiModelId(saved.modelId);
+        setAiHasSavedKey(saved.hasKey);
+      } else {
+        setAiProviderId("openrouter");
+        setAiBaseUrl(providerBaseUrl("openrouter"));
+        setAiModelId("");
+        setAiHasSavedKey(false);
+      }
+      setAiApiKey("");
+      setAiModels([]);
+      setAiModelSearch("");
+    } catch (e) {
+      setAiSettingsError(e instanceof Error ? e.message : "Could not load AI settings.");
+    }
+  };
+
+  const updateAiProvider = (value: string) => {
+    const next = AI_PROVIDERS.find((provider) => provider.id === value);
+    if (!next) return;
+    setAiProviderId(next.id);
+    setAiBaseUrl(next.baseUrl);
+    setAiModels([]);
+    setAiModelId("");
+    setAiHasSavedKey(false);
+  };
+
+  const loadAiModels = async () => {
+    setAiLoadingModels(true);
+    setAiSettingsError("");
+    setAiSettingsMessage("");
+    try {
+      const result = await getModels({ data: { providerId: aiProviderId, baseUrl: aiBaseUrl, apiKey: aiApiKey || undefined } });
+      setAiModels(result.models);
+      setAiModelId((current) => result.models.some((model) => model.id === current) ? current : result.models[0]?.id ?? "");
+      setAiSettingsMessage(`${result.models.length} models loaded.`);
+    } catch (e) {
+      setAiSettingsError(e instanceof Error ? e.message : "Could not load models.");
+    } finally {
+      setAiLoadingModels(false);
+    }
+  };
+
+  const saveAiProvider = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setAiSaving(true);
+    setAiSettingsError("");
+    setAiSettingsMessage("");
+    try {
+      await saveAiSettings({ data: { providerId: aiProviderId, baseUrl: aiBaseUrl, apiKey: aiApiKey || undefined, modelId: aiModelId } });
+      setAiApiKey("");
+      setAiHasSavedKey(true);
+      setAiSettingsMessage("Your provider and model are saved securely.");
+    } catch (e) {
+      setAiSettingsError(e instanceof Error ? e.message : "Could not save AI settings.");
+    } finally {
+      setAiSaving(false);
+    }
+  };
+
+  const removeAiProvider = async () => {
+    setAiSaving(true);
+    setAiSettingsError("");
+    setAiSettingsMessage("");
+    try {
+      await removeAiSettings();
+      setAiHasSavedKey(false);
+      setAiModelId("");
+      setAiModels([]);
+      setAiApiKey("");
+      setAiSettingsMessage("Your saved provider key was removed.");
+    } catch (e) {
+      setAiSettingsError(e instanceof Error ? e.message : "Could not remove your AI settings.");
+    } finally {
+      setAiSaving(false);
+    }
+  };
+
   return (
     <main className="tracker-page">
-      <header className="topbar"><div className="topbar-inner"><div className="brand"><span className="brand-mark"><Leaf/></span><span>nourish</span></div><div className="topbar-right"><span className="topbar-date">{dateLabel()}</span><Button type="button" variant="ghost" size="icon" title="Edit your nutrition profile" aria-label="Edit your nutrition profile" onClick={() => setProfileOpen(true)}><Settings2/></Button><Button type="button" variant="ghost" size="icon" title="Sign out" aria-label="Sign out" onClick={() => void signOut()}><LogOut/></Button><div className="avatar-mark">{userName.slice(0,1).toUpperCase()}</div></div></div></header>
+      <header className="topbar"><div className="topbar-inner"><div className="brand"><span className="brand-mark"><Leaf/></span><span>nourish</span></div><div className="topbar-right"><span className="topbar-date">{dateLabel()}</span><Button type="button" variant="ghost" size="icon" title="AI provider settings" aria-label="AI provider settings" onClick={() => void openAiSettings()}><KeyRound/></Button><Button type="button" variant="ghost" size="icon" title="Edit your nutrition profile" aria-label="Edit your nutrition profile" onClick={() => setProfileOpen(true)}><Settings2/></Button><Button type="button" variant="ghost" size="icon" title="Sign out" aria-label="Sign out" onClick={() => void signOut()}><LogOut/></Button><div className="avatar-mark">{userName.slice(0,1).toUpperCase()}</div></div></div></header>
 
       <div className="tracker-content">
         <div className="welcome-row"><div><p className="eyebrow">{dateLabel()}</p><h1>A good day to nourish, {userName}.</h1><p className="welcome-sub">Little by little, a picture of what keeps you well.</p></div><div className="day-chip"><span className="day-chip-dot"/><span>{mealCount} {mealCount === 1 ? "meal" : "meals"} today</span></div></div>
@@ -166,6 +271,7 @@ function Dashboard() {
       </div>
 
       {profileOpen && <div className="modal-backdrop" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) setProfileOpen(false); }}><section className="profile-modal" role="dialog" aria-modal="true" aria-labelledby="profile-title"><div className="modal-top"><div><p className="eyebrow">YOUR PERSONAL GUIDE</p><h2 id="profile-title">A little about you</h2><p>This helps make your daily targets personal.</p></div><Button type="button" variant="ghost" size="icon" aria-label="Close profile" onClick={() => setProfileOpen(false)}><X/></Button></div><form onSubmit={saveProfileAction} className="profile-form"><div className="form-grid"><label>Name<Input value={profile.display_name ?? ""} onChange={(e) => updateField("display_name", e.target.value)} placeholder="What should we call you?"/></label><label>Age<Input type="number" min="14" max="110" required value={profile.age ?? ""} onChange={(e) => updateField("age", e.target.value)} placeholder="Years"/></label><label>Height<Input type="number" min="100" max="250" required value={profile.height_cm ?? ""} onChange={(e) => updateField("height_cm", e.target.value)} placeholder="cm"/></label><label>Weight<Input type="number" min="30" max="350" required value={profile.weight_kg ?? ""} onChange={(e) => updateField("weight_kg", e.target.value)} placeholder="kg"/></label><label>Sex for estimates<select required value={profile.sex ?? ""} onChange={(e) => updateField("sex", e.target.value)}><option value="" disabled>Select one</option><option value="female">Female</option><option value="male">Male</option><option value="other">Another / prefer not to say</option></select></label><label>Usual activity<select value={profile.activity_level} onChange={(e) => updateField("activity_level", e.target.value)}><option value="sedentary">Mostly sitting</option><option value="light">Lightly active</option><option value="moderate">Moderately active</option><option value="active">Very active</option><option value="very_active">Extremely active</option></select></label><label>Daily goal<select value={profile.goal} onChange={(e) => updateField("goal", e.target.value)}><option value="lose">Gradual weight loss</option><option value="maintain">Maintain my weight</option><option value="gain">Gradual weight gain</option></select></label></div><label>Dietary notes <span>(optional)</span><Textarea value={profile.dietary_notes ?? ""} onChange={(e) => updateField("dietary_notes", e.target.value)} placeholder="Preferences, allergies, or foods you avoid"/></label>{isProfileComplete && profile.height_cm && profile.weight_kg && profile.age && profile.sex && <div className="target-preview"><span><Flame/>Estimated daily energy target</span><strong>{computeTargets({ height_cm: profile.height_cm, weight_kg: profile.weight_kg, age: profile.age, sex: profile.sex as "male" | "female" | "other", activity_level: profile.activity_level as "sedentary" | "light" | "moderate" | "active" | "very_active", goal: profile.goal as "lose" | "maintain" | "gain" }).calories.toLocaleString()} <small>kcal</small></strong></div>}<p className="form-disclaimer">Targets are general estimates, not medical advice. These details stay private to your account.</p>{error && <p role="alert" className="auth-message">{error}</p>}<div className="modal-actions"><Button type="button" variant="outline" onClick={() => setProfileOpen(false)}>Cancel</Button><Button type="submit" disabled={savingProfile}>{savingProfile ? "Saving…" : "Save my profile"}<ArrowRightIcon/></Button></div></form></section></div>}
+      {aiSettingsOpen && <div className="modal-backdrop" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) setAiSettingsOpen(false); }}><section className="profile-modal ai-settings-modal" role="dialog" aria-modal="true" aria-labelledby="ai-settings-title"><div className="modal-top"><div><p className="eyebrow">PRIVATE TO YOUR ACCOUNT</p><h2 id="ai-settings-title">AI provider</h2><p>Use your own key to choose where meal analysis runs.</p></div><Button type="button" variant="ghost" size="icon" aria-label="Close AI settings" onClick={() => setAiSettingsOpen(false)}><X/></Button></div><form onSubmit={saveAiProvider} className="profile-form"><label>Provider<select value={aiProviderId} onChange={(e) => updateAiProvider(e.target.value)}>{AI_PROVIDERS.map((provider) => <option key={provider.id} value={provider.id}>{provider.label}</option>)}</select></label><label>API base URL<Input type="url" required value={aiBaseUrl} onChange={(e) => { setAiBaseUrl(e.target.value); setAiModels([]); setAiModelId(""); }} placeholder="https://api.example.com/v1" autoComplete="url"/><span className="ai-settings-hint">Use the provider's OpenAI-compatible API address.</span></label><label>API key<Input type="password" value={aiApiKey} onChange={(e) => setAiApiKey(e.target.value)} placeholder={aiHasSavedKey ? "Saved securely — enter a new key to replace it" : "Paste your provider key"} autoComplete="new-password"/><span className="ai-settings-hint">Your key is encrypted before storage and never shown again.</span></label><div className="ai-model-load"><Button type="button" variant="outline" disabled={aiLoadingModels || !aiBaseUrl.trim() || (!aiApiKey.trim() && !aiHasSavedKey)} onClick={() => void loadAiModels()}>{aiLoadingModels ? <><LoaderCircle className="animate-spin"/>Loading models…</> : "Load available models"}</Button>{aiModels.length > 0 && <span>{aiModels.length} available</span>}</div>{aiModels.length > 0 && <><label>Search models<Input type="search" value={aiModelSearch} onChange={(e) => setAiModelSearch(e.target.value)} placeholder="Filter by model name or ID"/></label><label>Model<select required value={aiModelId} onChange={(e) => setAiModelId(e.target.value)}><option value="" disabled>Choose a model</option>{aiModels.filter((model) => `${model.name} ${model.id}`.toLowerCase().includes(aiModelSearch.trim().toLowerCase())).map((model) => <option key={model.id} value={model.id}>{model.name}{model.name !== model.id ? ` · ${model.id}` : ""}</option>)}</select></label></>}{aiSettingsError && <p role="alert" className="auth-message">{aiSettingsError}</p>}{aiSettingsMessage && <p role="status" className="auth-message">{aiSettingsMessage}</p>}<div className="modal-actions ai-settings-actions">{aiHasSavedKey && <Button type="button" variant="outline" disabled={aiSaving} onClick={() => void removeAiProvider()}>{aiSaving ? "Saving…" : "Remove key"}</Button>}<Button type="submit" disabled={aiSaving || !aiModelId}>{aiSaving ? "Saving…" : "Save provider"}<ArrowRightIcon/></Button></div></form></section></div>}
     </main>
   );
 }

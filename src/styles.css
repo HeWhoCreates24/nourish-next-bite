@@ -353,6 +353,11 @@
   .target-preview strong { font-family: var(--font-display); font-size: 1.5rem; font-weight: 500; } .target-preview small { font-family: var(--font-sans); font-size: .76rem; }
   .form-disclaimer { margin: 0; color: var(--color-muted-foreground); font-size: .76rem; }
   .modal-actions { display: flex; justify-content: flex-end; gap: .6rem; }
+  .ai-settings-modal { width: min(100%, 38rem); }
+  .ai-settings-hint { color: var(--color-muted-foreground); font-size: .75rem; font-weight: 400; line-height: 1.45; }
+  .ai-model-load { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; }
+  .ai-model-load > span { color: var(--color-muted-foreground); font-size: .78rem; }
+  .ai-settings-actions { flex-wrap: wrap; }
 
   @media (max-width: 1000px) {
     .overview-grid { grid-template-columns: 1fr 1fr; } .focus-panel { grid-column: 1 / -1; min-height: auto; }

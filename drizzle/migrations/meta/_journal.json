@@ -8,6 +8,13 @@
       "when": 1795018061824,
       "tag": "0000_create_diet_tracker",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1795054945967,
+      "tag": "0001_create_user_ai_provider_settings",
+      "breakpoints": true
     }
   ]
 }
